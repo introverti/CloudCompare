@@ -1,5 +1,4 @@
-#ifndef FEATURE_CALIBRATION_H_
-#define FEATURE_CALIBRATION_H_
+#pragma once
 
 #include <pcl/features/normal_3d.h>
 #include <pcl/filters/extract_indices.h>
@@ -113,5 +112,3 @@ class Operator {
 Eigen::Matrix3f transforme_normal_normal_3d(const Eigen::Vector3f &start,
                                             const Eigen::Vector3f &final);
 }  // namespace Calibration
-
-#endif  // FEATURE_CALIBRATION_H_

@@ -18,7 +18,6 @@
 #pragma once
 
 #include "ccStdPluginInterface.h"
-#include "calibration.h"
 
 //! Example qCC plugin
 /** Replace 'CalibPlugin' by your own plugin class name throughout and then
@@ -38,7 +37,7 @@
 	components (database, 3D views, console, etc.) - see the ccMainAppInterface
 	class in ccMainAppInterface.h.
 **/
-class CalibPlugin : public QObject, public ccStdPluginInterface
+class MergePlugin : public QObject, public ccStdPluginInterface
 {
 	Q_OBJECT
 	Q_INTERFACES( ccPluginInterface ccStdPluginInterface )
@@ -46,11 +45,11 @@ class CalibPlugin : public QObject, public ccStdPluginInterface
 	// Replace "Example" by your plugin name (IID should be unique - let's hope your plugin name is unique ;)
 	// The info.json file provides information about the plugin to the loading system and
 	// it is displayed in the plugin information dialog.
-	Q_PLUGIN_METADATA( IID "cccorp.cloudcompare.plugin.CalibPlugin" FILE "../info.json" )
+	Q_PLUGIN_METADATA( IID "cccorp.cloudcompare.plugin.MergePlugin" FILE "../info.json" )
 
 public:
-	explicit CalibPlugin( QObject *parent = nullptr );
-	~CalibPlugin() override = default;
+	explicit MergePlugin( QObject *parent = nullptr );
+	~MergePlugin() override = default;
 
 	// Inherited from ccStdPluginInterface
 	void onNewSelection( const ccHObject::Container &selectedEntities ) override;
@@ -64,5 +63,4 @@ private:
 		toolbar and an entry in the plugin menu.
 	**/
 	QAction* m_action;
-	std::shared_ptr<Calibration::Operator> m_operator;
 };

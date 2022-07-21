@@ -33,7 +33,7 @@
 // is displayed in the plugin dialog 	 "authors", "maintainers", and
 // "references" show up in the plugin dialog as well
 
-#include "CalibPlugin.h"
+#include "calibplugin.h"
 
 #include <ReferenceCloud.h>
 #include <ccPointCloud.h>
@@ -155,17 +155,17 @@ void CalibPlugin::doAction() {
     Eigen::Vector3f feature_point;
     m_operator->setInputCloud(input_cloud);
     if (m_operator->compute(feature_point, output_cloud)) {
-      m_app->dispToConsole(
-          QString("[Calibration] Output Cloud Size %1").arg(output_cloud->size()),
-          ccMainAppInterface::STD_CONSOLE_MESSAGE);
+      m_app->dispToConsole(QString("[Calibration] Output Cloud Size %1")
+                               .arg(output_cloud->size()),
+                           ccMainAppInterface::STD_CONSOLE_MESSAGE);
       pcl::toPCLPointCloud2(*output_cloud, *output_cloud2);
-      m_app->dispToConsole(
-          QString("[Calibration] Output Cloud 2 Size %1").arg(output_cloud2->data.size()),
-          ccMainAppInterface::STD_CONSOLE_MESSAGE);
+      m_app->dispToConsole(QString("[Calibration] Output Cloud 2 Size %1")
+                               .arg(output_cloud2->data.size()),
+                           ccMainAppInterface::STD_CONSOLE_MESSAGE);
       auto cc_cloud_ptr = pcl2cc::Convert(*output_cloud2);
-      m_app->dispToConsole(
-          QString("[Calibration] Output Cloud CC Size %1").arg(cc_cloud_ptr->size()),
-          ccMainAppInterface::STD_CONSOLE_MESSAGE);
+      m_app->dispToConsole(QString("[Calibration] Output Cloud CC Size %1")
+                               .arg(cc_cloud_ptr->size()),
+                           ccMainAppInterface::STD_CONSOLE_MESSAGE);
       if (cc_cloud_ptr) {
         cc_cloud_ptr->setName(cloud->getName() + QString(".Calibration"));
         cc_cloud_ptr->setGlobalShift(cloud->getGlobalShift());
@@ -176,12 +176,15 @@ void CalibPlugin::doAction() {
         cloud->setEnabled(false);
         m_app->addToDB(cc_cloud_ptr);
         cc_cloud_ptr->prepareDisplayForRefresh();
+        // ccLog::Print(QString("[Picked] ") + m_label->getName());
+        m_app->dispToConsole(
+            QString("[Calibration] Get center point coordinate %1")
+                .arg(parse_vector3f(feature_point)),
+            ccMainAppInterface::STD_CONSOLE_MESSAGE);
+      } else {
+        m_app->dispToConsole("[Calibration] Failed to convert between CC and PCL!",
+                             ccMainAppInterface::STD_CONSOLE_MESSAGE);
       }
-      // ccLog::Print(QString("[Picked] ") + m_label->getName());
-      m_app->dispToConsole(
-          QString("[Calibration] Get center point coordinate %1")
-              .arg(parse_vector3f(feature_point)),
-          ccMainAppInterface::STD_CONSOLE_MESSAGE);
     } else {
       m_app->dispToConsole("[Calibration] Failed to find intensity data!",
                            ccMainAppInterface::STD_CONSOLE_MESSAGE);

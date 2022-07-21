@@ -11,7 +11,7 @@ find_package(OpenCV 4.2.0 REQUIRED)
 find_package(Eigen3)
 find_package(yaml-cpp 0.5.2 REQUIRED)
 
-if ( PLUGIN_EXAMPLE_STANDARD )
+if ( PLUGIN_SINGLE_CALIBRATION )
 	project( CalibPlugin )
 	 
 	AddPlugin( NAME ${PROJECT_NAME} )
