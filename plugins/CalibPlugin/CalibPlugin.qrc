@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/CC/plugin/CalibPlugin" >
+    <file>images/icon.png</file>
+    <file>info.json</file>
+  </qresource>
+</RCC>

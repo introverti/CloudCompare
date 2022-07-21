@@ -1,0 +1,24 @@
+{
+	"type" : "Standard",
+	"name" : "CalibPlugin",
+	"icon" : ":/CC/plugin/CalibPlugin/images/icon.png",
+	"description": "Calibration tools",
+	"authors" : [
+		{
+			"name" : "Tianyun Xuan",
+			"email" : "tianyun.xuan@cn.innovusion.com"
+		}
+	],
+	"maintainers" : [
+		{
+			"name" : "Tianyun Xuan",
+			"email" : "tianyun.xuan@cn.innovusion.com"
+		}
+	],
+	"references" : [
+		{
+			"text" : "TODO",
+			"url" : "TODO"
+		}
+	]
+}
