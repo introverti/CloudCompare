@@ -35,7 +35,6 @@
 
 #include "calibplugin.h"
 
-#include <ReferenceCloud.h>
 #include <ccPointCloud.h>
 #include <pcl/PCLPointCloud2.h>
 #include <pcl/conversions.h>
@@ -43,6 +42,8 @@
 #include <Eigen/Core>
 #include <QMainWindow>
 #include <QtGui>
+#include <fstream>
+#include <iostream>
 #include <string>
 
 #include "calibdlg.h"
@@ -111,90 +112,124 @@ QList<QAction *> CalibPlugin::getActions() {
 }
 
 void CalibPlugin::doAction() {
+  // null app
   if (m_app == nullptr) {
     Q_ASSERT(false);
     return;
   }
+  // fail to launch qwidget
   CalibDlg dlg(m_app->getMainWindow());
   if (!dlg.exec()) {
     return;
   }
-  ccPointCloud *cloud;
+  // check selected element number
   const ccHObject::Container &selectedEntities = m_app->getSelectedEntities();
+  // this case should never occur
   if (selectedEntities.size() < 1) {
     m_app->dispToConsole("[Calibration] Please select at least one pointcloud",
                          ccMainAppInterface::ERR_CONSOLE_MESSAGE);
     return;
   }
-  ccHObject *entity = selectedEntities[0];
-  if (entity->isA(CC_TYPES::POINT_CLOUD)) {
-    cloud = static_cast<ccPointCloud *>(entity);
-  } else {
-    m_app->dispToConsole("[Calibration] not a CC_TYPES::POINT_CLOUD",
-                         ccMainAppInterface::ERR_CONSOLE_MESSAGE);
+  // check the destination file address
+  const QString qs_addr = dlg.openFilesPath;
+  const std::string file_addr = qs_addr.toStdString();
+  std::fstream fd(file_addr, std::ios::out);
+  if (!fd.is_open()) {
+    m_app->dispToConsole(
+        QString("[Calibration] %1 : Not a valid path.").arg(qs_addr),
+        ccMainAppInterface::ERR_CONSOLE_MESSAGE);
     return;
   }
-
-  QString defaultSFName("intensity");
-  int sfIdx = -1;
-  if (cloud->getNumberOfScalarFields() >= 1) {
-    if (!defaultSFName.isEmpty()) {
-      // if it's valid, we'll keep this SF!
-      sfIdx = cloud->getScalarFieldIndexByName(qPrintable(defaultSFName));
-    }
-  }
-  if (sfIdx >= 0) {
-    CCCoreLib::ScalarField *sf = cloud->getScalarField(sfIdx);
-    CCCoreLib::ReferenceCloud sampledCloud(cloud);
-
-    pcl::PointCloud<pcl::PointXYZI>::Ptr input_cloud(
-        new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud(
-        new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::PCLPointCloud2::Ptr output_cloud2(new pcl::PCLPointCloud2);
-    for (unsigned int i = 0; i < cloud->size(); ++i) {
-      auto t_src = cloud->getPoint(i);
-      pcl::PointXYZI t_point{t_src->x, t_src->y, t_src->z};
-      t_point.intensity = float(sf->getValue(i));
-      input_cloud->emplace_back(t_point);
-    }
-    Eigen::Vector3f feature_point;
-    m_operator->setInputCloud(input_cloud);
-    if (m_operator->compute(feature_point, output_cloud)) {
-      m_app->dispToConsole(QString("[Calibration] Output Cloud Size %1")
-                               .arg(output_cloud->size()),
-                           ccMainAppInterface::STD_CONSOLE_MESSAGE);
-      pcl::toPCLPointCloud2(*output_cloud, *output_cloud2);
-      m_app->dispToConsole(QString("[Calibration] Output Cloud 2 Size %1")
-                               .arg(output_cloud2->data.size()),
-                           ccMainAppInterface::STD_CONSOLE_MESSAGE);
-      auto cc_cloud_ptr = pcl2cc::Convert(*output_cloud2);
-      m_app->dispToConsole(QString("[Calibration] Output Cloud CC Size %1")
-                               .arg(cc_cloud_ptr->size()),
-                           ccMainAppInterface::STD_CONSOLE_MESSAGE);
-      if (cc_cloud_ptr) {
-        cc_cloud_ptr->setName(cloud->getName() + QString(".Calibration"));
-        cc_cloud_ptr->setGlobalShift(cloud->getGlobalShift());
-        cc_cloud_ptr->setGlobalScale(cloud->getGlobalScale());
-        cc_cloud_ptr->setDisplay(cloud->getDisplay());
-        cc_cloud_ptr->prepareDisplayForRefresh();
-        if (cloud->getParent()) cloud->getParent()->addChild(cc_cloud_ptr);
-        cloud->setEnabled(false);
-        m_app->addToDB(cc_cloud_ptr);
-        cc_cloud_ptr->prepareDisplayForRefresh();
-        // ccLog::Print(QString("[Picked] ") + m_label->getName());
-        m_app->dispToConsole(
-            QString("[Calibration] Get center point coordinate %1")
-                .arg(parse_vector3f(feature_point)),
-            ccMainAppInterface::STD_CONSOLE_MESSAGE);
+  // header
+  fd << "[lidar]" << std::endl;
+  const QString defaultSFName("intensity");
+  // main process
+  for (size_t i = 0; i < selectedEntities.size(); ++i) {
+    ccPointCloud *cloud;
+    ccHObject *entity = selectedEntities[i];
+    // check entity type
+    if (entity->isA(CC_TYPES::POINT_CLOUD)) {
+      cloud = static_cast<ccPointCloud *>(entity);
+      int sfIdx = -1;
+      // check ScalarFields
+      if (cloud->getNumberOfScalarFields() >= 1) {
+        sfIdx = cloud->getScalarFieldIndexByName(qPrintable(defaultSFName));
+        // check ScalarFiled offset
+        if (sfIdx >= 0) {
+          CCCoreLib::ScalarField *sf = cloud->getScalarField(sfIdx);
+          pcl::PointCloud<pcl::PointXYZI>::Ptr input_cloud(
+              new pcl::PointCloud<pcl::PointXYZI>);
+          pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud(
+              new pcl::PointCloud<pcl::PointXYZI>);
+          pcl::PCLPointCloud2::Ptr output_cloud2(new pcl::PCLPointCloud2);
+          for (unsigned int ii = 0; ii < cloud->size(); ++ii) {
+            auto t_src = cloud->getPoint(ii);
+            pcl::PointXYZI t_point{t_src->x, t_src->y, t_src->z};
+            t_point.intensity = float(sf->getValue(ii));
+            input_cloud->emplace_back(t_point);
+          }
+          Eigen::Vector3f feature_point;
+          m_operator->setInputCloud(input_cloud);
+          if (m_operator->compute(feature_point, output_cloud)) {
+            m_app->dispToConsole(QString("[Calibration] Output Cloud Size %1")
+                                     .arg(output_cloud->size()),
+                                 ccMainAppInterface::STD_CONSOLE_MESSAGE);
+            pcl::toPCLPointCloud2(*output_cloud, *output_cloud2);
+            auto cc_cloud_ptr = pcl2cc::Convert(*output_cloud2);
+            if (cc_cloud_ptr) {
+              cc_cloud_ptr->setName(cloud->getName() + QString(".Calibration"));
+              cc_cloud_ptr->setGlobalShift(cloud->getGlobalShift());
+              cc_cloud_ptr->setGlobalScale(cloud->getGlobalScale());
+              cc_cloud_ptr->setDisplay(cloud->getDisplay());
+              cc_cloud_ptr->prepareDisplayForRefresh();
+              if (cloud->getParent())
+                cloud->getParent()->addChild(cc_cloud_ptr);
+              cloud->setEnabled(false);
+              m_app->addToDB(cc_cloud_ptr);
+              cc_cloud_ptr->prepareDisplayForRefresh();
+              m_app->dispToConsole(
+                  QString("[Calibration] Get center point coordinate %1")
+                      .arg(parse_vector3f(feature_point)),
+                  ccMainAppInterface::STD_CONSOLE_MESSAGE);
+              fd << feature_point;
+            } else {
+              m_app->dispToConsole(
+                  QString(
+                      "[Calibration] Entity[%1] ccPointCloud is nullptr.")
+                      .arg(i),
+                  ccMainAppInterface::ERR_CONSOLE_MESSAGE);
+            }
+          } else {
+            m_app->dispToConsole(
+                QString(
+                    "[Calibration] Entity[%1] Failed to find feature point.")
+                    .arg(i),
+                ccMainAppInterface::ERR_CONSOLE_MESSAGE);
+          }
+        } else {
+          m_app->dispToConsole(
+              QString(
+                  "[Calibration] Entity[%1] ScalarFiled offset is not valid.")
+                  .arg(i),
+              ccMainAppInterface::ERR_CONSOLE_MESSAGE);
+        }
       } else {
         m_app->dispToConsole(
-            "[Calibration] Failed to convert between CC and PCL!",
-            ccMainAppInterface::STD_CONSOLE_MESSAGE);
+            QString("[Calibration] Entity[%1] doesnt have ScalarFields.")
+                .arg(i),
+            ccMainAppInterface::ERR_CONSOLE_MESSAGE);
       }
     } else {
-      m_app->dispToConsole("[Calibration] Failed to find intensity data!",
-                           ccMainAppInterface::STD_CONSOLE_MESSAGE);
+      m_app->dispToConsole(
+          QString("[Calibration] Entity[%1] type is not CC_TYPES::POINT_CLOUD.")
+              .arg(i),
+          ccMainAppInterface::ERR_CONSOLE_MESSAGE);
     }
+    fd << std::endl;
   }
+  fd.close();
+  m_app->dispToConsole(
+      QString("[Calibration] Save feature point coordinate to :  %1")
+          .arg(qs_addr),
+      ccMainAppInterface::STD_CONSOLE_MESSAGE);
 }
