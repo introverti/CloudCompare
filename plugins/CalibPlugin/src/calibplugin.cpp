@@ -191,11 +191,10 @@ void CalibPlugin::doAction() {
                   QString("[Calibration] Get center point coordinate %1")
                       .arg(parse_vector3f(feature_point)),
                   ccMainAppInterface::STD_CONSOLE_MESSAGE);
-              fd << feature_point;
+              fd << feature_point(0) << "," << feature_point(1) << "," << feature_point(2);
             } else {
               m_app->dispToConsole(
-                  QString(
-                      "[Calibration] Entity[%1] ccPointCloud is nullptr.")
+                  QString("[Calibration] Entity[%1] ccPointCloud is nullptr.")
                       .arg(i),
                   ccMainAppInterface::ERR_CONSOLE_MESSAGE);
             }
