@@ -115,8 +115,8 @@ void CalibPlugin::doAction() {
   }
   ccPointCloud *cloud;
   const ccHObject::Container &selectedEntities = m_app->getSelectedEntities();
-  if (selectedEntities.size() != 1) {
-    m_app->dispToConsole("[Calibration] selectedEntities.size() != 1",
+  if (selectedEntities.size() < 1) {
+    m_app->dispToConsole("[Calibration] Please select at least one pointcloud",
                          ccMainAppInterface::ERR_CONSOLE_MESSAGE);
     return;
   }
@@ -182,8 +182,9 @@ void CalibPlugin::doAction() {
                 .arg(parse_vector3f(feature_point)),
             ccMainAppInterface::STD_CONSOLE_MESSAGE);
       } else {
-        m_app->dispToConsole("[Calibration] Failed to convert between CC and PCL!",
-                             ccMainAppInterface::STD_CONSOLE_MESSAGE);
+        m_app->dispToConsole(
+            "[Calibration] Failed to convert between CC and PCL!",
+            ccMainAppInterface::STD_CONSOLE_MESSAGE);
       }
     } else {
       m_app->dispToConsole("[Calibration] Failed to find intensity data!",
