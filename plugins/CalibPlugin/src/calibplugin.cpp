@@ -41,9 +41,11 @@
 #include <pcl/conversions.h>
 
 #include <Eigen/Core>
+#include <QMainWindow>
 #include <QtGui>
 #include <string>
 
+#include "calibdlg.h"
 #include "sm2cc.h"
 
 QString parse_vector3f(const Eigen::Vector3f &vec) {
@@ -111,6 +113,10 @@ QList<QAction *> CalibPlugin::getActions() {
 void CalibPlugin::doAction() {
   if (m_app == nullptr) {
     Q_ASSERT(false);
+    return;
+  }
+  CalibDlg dlg(m_app->getMainWindow());
+  if (!dlg.exec()) {
     return;
   }
   ccPointCloud *cloud;
