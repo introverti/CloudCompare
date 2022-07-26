@@ -26,6 +26,7 @@
 //##########################################################################
 
 #include "calibdlg.h"
+
 #include <QtWidgets>
 
 CalibDlg::CalibDlg(QWidget *parent)
@@ -34,16 +35,17 @@ CalibDlg::CalibDlg(QWidget *parent)
   int frameStyle = QFrame::Sunken | QFrame::Panel;
   saveFileNameLabel = new QLabel;
   saveFileNameLabel->setFrameStyle(frameStyle);
-  QPushButton *saveFileNameButton =
-      new QPushButton(tr("QFileDialog::get&SaveFileName()"));
+  QPushButton *saveFileNameButton = new QPushButton(tr("SaveFileName"));
 
   connect(saveFileNameButton, &QAbstractButton::clicked, this,
           &CalibDlg::setSaveFileName);
-
   QGridLayout *layout = new QGridLayout(this);
-  // layout->setRowStretch(2, 1);
   layout->addWidget(saveFileNameButton, 0, 0);
-  layout->addWidget(saveFileNameLabel, 1, 0);
+  layout->addWidget(saveFileNameLabel, 0, 1);
+  layout->addWidget(lidar_type_label, 1, 0, Qt::AlignCenter);
+  layout->addWidget(lidar_type_box, 1, 1);
+  layout->addWidget(lidar_field_label, 2, 0, Qt::AlignCenter);
+  layout->addWidget(lidar_field_box, 2, 1);
   layout->addWidget(buttonBox);
 }
 

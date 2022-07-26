@@ -133,6 +133,8 @@ void CalibPlugin::doAction() {
   // check the destination file address
   const QString qs_addr = dlg.openFilesPath;
   const std::string file_addr = qs_addr.toStdString();
+    const QString defaultSFName = dlg.lidar_field_box->currentText();
+  const QString lidar_model = dlg.lidar_type_box->currentText();
   std::fstream fd(file_addr, std::ios::out);
   if (!fd.is_open()) {
     m_app->dispToConsole(
@@ -142,7 +144,6 @@ void CalibPlugin::doAction() {
   }
   // header
   fd << "[lidar]" << std::endl;
-  const QString defaultSFName("intensity");
   // main process
   for (size_t i = 0; i < selectedEntities.size(); ++i) {
     ccPointCloud *cloud;
