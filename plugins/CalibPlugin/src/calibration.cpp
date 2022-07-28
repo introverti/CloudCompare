@@ -1,5 +1,12 @@
 #include "calibration.h"
+
+#include "logger.h"
 namespace Calibration {
+void Operator::save_pcd(std::string name, const CloudPtr &cloud) {
+  if (save_flag_ && cloud->size()) {
+    pcl::io::savePCDFileBinary(name, *cloud);
+  }
+}
 
 Eigen::Matrix3f transforme_normal_normal_3d(const Eigen::Vector3f &start,
                                             const Eigen::Vector3f &final) {
@@ -100,7 +107,7 @@ void Operator::guide_filter(CloudPtr source, CloudPtr &result) {
   unsigned int k = 20;
   double epsilon = 0.05;
   kdtree_->setInputCloud(source);
-  // inno_log_info("Guide filter Input size : %ld", source->size());
+  inno_log_info("Guide filter Input size : %ld", source->size());
   for (size_t i = 0; i < source->size(); ++i) {
     std::vector<int> indices(0, 0);
     indices.reserve(k);
@@ -145,8 +152,17 @@ void Operator::guide_filter(CloudPtr source, CloudPtr &result) {
   result->width = result->size();
   result->height = 1;
   result->resize(double(result->width) * double(result->height));
+  inno_log_info("Guide filter Output size : %ld", result->size());
 }
 
+void Operator::outline_remove(CloudPtr source, CloudPtr &result) {
+  result->clear();
+  pcl::RadiusOutlierRemoval<pcl::PointXYZI> rout;
+  rout.setInputCloud(source);
+  rout.setRadiusSearch(0.05);
+  rout.setMinNeighborsInRadius(5);
+  rout.filter(*result);
+}
 void Operator::dbscan(CloudPtr source, CloudPtr &result) {
   result->clear();
 #define UN_PROCESSED 0
@@ -211,54 +227,8 @@ void Operator::dbscan(CloudPtr source, CloudPtr &result) {
   }
 }
 
-void Operator::euclidean_cluster(CloudPtr source, CloudPtr &result) {
-  result->clear();
-  tree_->setInputCloud(source);
-  int npoint = source->size();
-  std::vector<pcl::PointIndices> clusterIndices;
-  pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
-  ec.setClusterTolerance(0.1);
-  ec.setMinClusterSize(0.1 * npoint);
-  ec.setMaxClusterSize(npoint);
-  ec.setSearchMethod(tree_);
-  ec.setInputCloud(source);
-  ec.extract(clusterIndices);
-
-  // inno_log_info("Cluster size %ld", clusterIndices.size());
-  for (size_t i = 0; i < clusterIndices.size(); ++i) {
-    pcl::PointCloud<pcl::PointXYZI>::Ptr temp(
-        new pcl::PointCloud<pcl::PointXYZI>);
-    float x_lhv = source->points[clusterIndices[i].indices[0]].x;
-    float x_rhv = x_lhv;
-    float y_lhv = source->points[clusterIndices[i].indices[0]].y;
-    float y_rhv = y_lhv;
-    float z_lhv = source->points[clusterIndices[i].indices[0]].z;
-    float z_rhv = z_lhv;
-    for (size_t j = 0; j < clusterIndices[i].indices.size(); ++j) {
-      auto ptemp = source->points[clusterIndices[i].indices[j]];
-      x_lhv = std::min(x_lhv, ptemp.x);
-      x_rhv = std::max(x_rhv, ptemp.x);
-      y_lhv = std::min(y_lhv, ptemp.y);
-      y_rhv = std::max(y_rhv, ptemp.y);
-      z_lhv = std::min(z_lhv, ptemp.z);
-      z_rhv = std::max(z_rhv, ptemp.z);
-      temp->emplace_back(source->points[clusterIndices[i].indices[j]]);
-    }
-    float xdim = std::fabs(x_rhv - x_lhv);
-    float ydim = std::fabs(y_rhv - y_lhv);
-    float zdim = std::fabs(z_rhv - z_lhv);
-    // inno_log_info("Cluster %ld xd: %f yd: %f zd: %f", i, xdim, ydim, zdim);
-    if (xdim > 0.2 && xdim < 0.4 && ydim > 0.2 && ydim < 0.4 && zdim < 0.3) {
-      if (result->size() == 0) {
-        result = temp;
-      } else {
-        // inno_log_warning("Find second useful cluster");
-      }
-    }
-  }
-}
-
 void Operator::region_growing_cluster(CloudPtr source, CloudPtr &result) {
+  inno_log_info("Region Growing Cluster Input size : %ld", source->size());
   result->clear();
   pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
   normal_estimator_.setInputCloud(source);
@@ -266,21 +236,19 @@ void Operator::region_growing_cluster(CloudPtr source, CloudPtr &result) {
 
   pcl::RegionGrowing<pcl::PointXYZI, pcl::Normal> reg;
   int npoint = source->size();
-  float SmoothnessThreshold = 6.0;
-  float CurvatureThreshold = 0.05;
 
   reg.setMinClusterSize(0.1 * npoint);
   reg.setMaxClusterSize(npoint);
   reg.setSearchMethod(tree_);
-  reg.setNumberOfNeighbours(100);
+  reg.setNumberOfNeighbours(50);
   reg.setInputCloud(source);
   reg.setInputNormals(normals);
-  reg.setSmoothnessThreshold(SmoothnessThreshold / 180.0 * M_PI);
-  reg.setCurvatureThreshold(CurvatureThreshold);
+  reg.setSmoothnessThreshold(smoothness_ / 180.0 * M_PI);
+  reg.setCurvatureThreshold(curvature_);
 
   std::vector<pcl::PointIndices> clusters;
   reg.extract(clusters);
-  // inno_log_info("Region_growing_cluster size %ld", clusters.size());
+  inno_log_info("Region_growing_cluster size %ld", clusters.size());
 
   // find the most voluminous cluster
   int index = 0;
@@ -332,7 +300,7 @@ void Operator::voteNormal(CloudPtr source, CloudPtr &result, float &angle) {
   size_t id_ballot = ballots.size() / 3;
   float standard_max = 1.2 * ballots[id_ballot].angle;
   float standard_min = 0.8 * ballots[id_ballot].angle;
-  // inno_log_info("Reference vote angle %f", ballots[id_ballot].angle);
+  inno_log_info("Reference vote angle %f", ballots[id_ballot].angle);
   Ballot sommus{};
   int account = 0;
   for (auto &item : ballots) {
@@ -350,7 +318,7 @@ void Operator::voteNormal(CloudPtr source, CloudPtr &result, float &angle) {
   sommus.z /= account;
   sommus.angle /= account;
   angle = sommus.angle;
-  // inno_log_info("Average Normal angle %f", sommus.angle);
+  inno_log_info("Average Normal angle %f", sommus.angle);
 
   std::vector<float> rotate(9, 0);
   std::vector<float> trans(3, 0);
@@ -405,18 +373,18 @@ void Operator::voteDistance(CloudPtr reference, CloudPtr target,
     }
   }
   auto iter = std::max_element(vote_map.begin(), vote_map.end());
-  // inno_log_info("[Vote Distance] Origin d_ = %f ", d_);
+  inno_log_info("[Vote Distance] Origin d_ = %f ", d_);
   float final_d = d_ - (iter - vote_map.begin()) * precision;
-  // inno_log_info("[Vote Distance] Max_elemet dm = %f ", final_d);
+  inno_log_info("[Vote Distance] Max_elemet dm = %f ", final_d);
   float distance = d_ - final_d;
-  // inno_log_info("[Vote Distance] Deplacement distance = %f", distance);
+  inno_log_info("[Vote Distance] Deplacement distance = %f", distance);
   d_ = final_d;
   pcl::PointXYZ deplacement;
   deplacement.x = distance * a_;
   deplacement.y = distance * b_;
   deplacement.z = distance * c_;
-  // inno_log_info("[Vote Distance] find deplacement (%f, %f, %f)",
-  // deplacement.x, deplacement.y, deplacement.z);
+  inno_log_info("[Vote Distance] find deplacement (%f, %f, %f)", deplacement.x,
+                deplacement.y, deplacement.z);
   for (auto point : reference->points) {
     pcl::PointXYZI tempp;
     tempp.x = point.x + deplacement.x;
@@ -438,7 +406,7 @@ void Operator::fitPlane(CloudPtr source, CloudPtr &result, float &a, float &b,
   seg.setOptimizeCoefficients(true);
   seg.setModelType(pcl::SACMODEL_PLANE);
   seg.setMethodType(pcl::SAC_RANSAC);
-  seg.setMaxIterations(10000);
+  seg.setMaxIterations(40000);
   seg.setDistanceThreshold(0.008);
   seg.setInputCloud(source);
   seg.segment(*inliers_plane, *coefficients_plane);
@@ -447,8 +415,7 @@ void Operator::fitPlane(CloudPtr source, CloudPtr &result, float &a, float &b,
   b = coefficients_plane->values[1];
   c = coefficients_plane->values[2];
   d = coefficients_plane->values[3];
-  // inno_log_info("Plane coefficient (a,b,c,d) = (%f, %f, %f, %f)", a, b, c,
-  // d);
+  inno_log_info("Plane coefficient (a,b,c,d) = (%f, %f, %f, %f)", a, b, c, d);
   pcl::copyPointCloud(*source, *inliers_plane, *result);
 }
 
@@ -509,10 +476,12 @@ Eigen::Vector3f Operator::find_feature_point(CloudPtr source) {
     tempp.x = curr.x();
     tempp.y = curr.y();
     tempp.z = curr.z();
+    tempp.intensity = point.intensity;
     projection_plane->emplace_back(tempp);
   }
   float center_x, center_y, center_z, radius;
   fitCircle(projection_plane, center_x, center_y, center_z, radius);
+  save_pcd(debug_folder_ + frame_name_ + "_p.pcd", projection_plane);
   Eigen::Vector3f selected_point =
       inverse_rotation * Eigen::Vector3f{center_x, center_y, center_z};
   return selected_point;
@@ -544,9 +513,10 @@ void Operator::nearMarkable(CloudPtr source, CloudPtr &result) {
   }
 }
 
-bool Operator::compute(Eigen::Vector3f &feature_point, CloudPtr& output) {
+int Operator::compute(Eigen::Vector3f &feature_point, CloudPtr &output) {
   CloudPtr around_cloud = CloudPtr(new pcl::PointCloud<pcl::PointXYZI>);
   CloudPtr attension_cloud = CloudPtr(new pcl::PointCloud<pcl::PointXYZI>);
+  CloudPtr markable_cloud = CloudPtr(new pcl::PointCloud<pcl::PointXYZI>);
   CloudPtr cluster_cloud = CloudPtr(new pcl::PointCloud<pcl::PointXYZI>);
   CloudPtr attension_plane = CloudPtr(new pcl::PointCloud<pcl::PointXYZI>);
   CloudPtr around_plane = CloudPtr(new pcl::PointCloud<pcl::PointXYZI>);
@@ -555,34 +525,60 @@ bool Operator::compute(Eigen::Vector3f &feature_point, CloudPtr& output) {
 
   if (input_cloud_->size()) {
     findAround(input_cloud_, around_cloud, attension_cloud, 254);
+    save_pcd(debug_folder_ + frame_name_ + "_1.pcd", around_cloud);
+    save_pcd(debug_folder_ + frame_name_ + "_2.pcd", attension_cloud);
   } else {
-    // inno_log_warning("Input PointCLoud is NULL %s", frame_name_.c_str());
-    return false;
+    inno_log_warning("Input PointCLoud is NULL");
+    return CE_INPUT_NULL;
   }
 
-  if (attension_cloud->size()) {
-    CloudPtr markable_cloud = CloudPtr(new pcl::PointCloud<pcl::PointXYZI>);
-    guide_filter(attension_cloud, markable_cloud);
-    region_growing_cluster(markable_cloud, cluster_cloud);
-  } else {
-    return false;
-  }
+  if (lidar_model_ == JAGUAR) {
+    if (attension_cloud->size()) {
+      guide_filter(attension_cloud, markable_cloud);
+      save_pcd(debug_folder_ + frame_name_ + "_3.pcd", markable_cloud);
+      region_growing_cluster(markable_cloud, cluster_cloud);
+      save_pcd(debug_folder_ + frame_name_ + "_4.pcd", cluster_cloud);
+    } else {
+      return CE_ATTENSION_NULL;
+    }
+    if (cluster_cloud->size()) {
+      fitPlane(cluster_cloud, attension_plane, a_, b_, c_, d_);
+      save_pcd(debug_folder_ + frame_name_ + "_5.pcd", attension_plane);
+      findPlate(around_cloud, around_plane, pcl::Normal(a_, b_, c_));
+      mergePointCloud(cluster_cloud, around_plane);
+      nearMarkable(around_plane, cleared_around_plane);
+      voteDistance(attension_plane, cleared_around_plane, final_plane);
+    } else {
+      return CE_CLUSTER_FAIL;
+    }
 
-  if (cluster_cloud->size()) {
-    fitPlane(cluster_cloud, attension_plane, a_, b_, c_, d_);
-    findPlate(around_cloud, around_plane, pcl::Normal(a_, b_, c_));
-    mergePointCloud(cluster_cloud, around_plane);
-    nearMarkable(around_plane, cleared_around_plane);
-    voteDistance(attension_plane, cleared_around_plane, final_plane);
-  } else {
-    return false;
-  }
+    if (final_plane->size()) {
+      feature_point = find_feature_point(final_plane);
+      output = final_plane;
+      return 0;
+    }
+  } else if (lidar_model_ = FALCON) {
+    if (attension_cloud->size()) {
+      guide_filter(attension_cloud, markable_cloud);
+      save_pcd(debug_folder_ + frame_name_ + "_3.pcd", markable_cloud);
+      outline_remove(markable_cloud, cluster_cloud);
+      save_pcd(debug_folder_ + frame_name_ + "_4.pcd", cluster_cloud);
+    } else {
+      return CE_ATTENSION_NULL;
+    }
+    if (cluster_cloud->size()) {
+      fitPlane(cluster_cloud, attension_plane, a_, b_, c_, d_);
+      save_pcd(debug_folder_ + frame_name_ + "_5.pcd", attension_plane);
+    } else {
+      return CE_CLUSTER_FAIL;
+    }
 
-  if (final_plane->size()) {
-    feature_point = find_feature_point(final_plane);
-    output = final_plane;
-    return true;
+    if (attension_plane->size()) {
+      feature_point = find_feature_point(attension_plane);
+      output = attension_plane;
+      return 0;
+    }
   }
-  return false;
+  return CE_NO_RESULT;
 }
 }  // namespace Calibration

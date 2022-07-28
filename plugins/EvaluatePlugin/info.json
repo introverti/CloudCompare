@@ -1,0 +1,24 @@
+{
+	"type" : "Standard",
+	"name" : "EvaluatePlugin",
+	"icon" : ":/CC/plugin/EvaluatePlugin/images/icon.png",
+	"description": "Evaluation tools",
+	"authors" : [
+		{
+			"name" : "Tianyun Xuan",
+			"email" : "tianyun.xuan@cn.innovusion.com"
+		}
+	],
+	"maintainers" : [
+		{
+			"name" : "Tianyun Xuan",
+			"email" : "tianyun.xuan@cn.innovusion.com"
+		}
+	],
+	"references" : [
+		{
+			"text" : "TODO",
+			"url" : "TODO"
+		}
+	]
+}

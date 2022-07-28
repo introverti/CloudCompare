@@ -133,7 +133,7 @@ void CalibPlugin::doAction() {
   // check the destination file address
   const QString qs_addr = dlg.openFilesPath;
   const std::string file_addr = qs_addr.toStdString();
-    const QString defaultSFName = dlg.lidar_field_box->currentText();
+  const QString defaultSFName = dlg.lidar_field_box->currentText();
   const QString lidar_model = dlg.lidar_type_box->currentText();
   std::fstream fd(file_addr, std::ios::out);
   if (!fd.is_open()) {
@@ -171,7 +171,10 @@ void CalibPlugin::doAction() {
           }
           Eigen::Vector3f feature_point;
           m_operator->setInputCloud(input_cloud);
-          if (m_operator->compute(feature_point, output_cloud)) {
+          m_operator->setFrameName(std::to_string(i));
+          m_operator->setDebugFolder("/home/xavier/old/0704/debug/");
+          int comput_status = m_operator->compute(feature_point, output_cloud);
+          if (comput_status == 0) {
             m_app->dispToConsole(QString("[Calibration] Output Cloud Size %1")
                                      .arg(output_cloud->size()),
                                  ccMainAppInterface::STD_CONSOLE_MESSAGE);
@@ -192,7 +195,8 @@ void CalibPlugin::doAction() {
                   QString("[Calibration] Get center point coordinate %1")
                       .arg(parse_vector3f(feature_point)),
                   ccMainAppInterface::STD_CONSOLE_MESSAGE);
-              fd << feature_point(0) << "," << feature_point(1) << "," << feature_point(2);
+              fd << feature_point(0) << "," << feature_point(1) << ","
+                 << feature_point(2);
             } else {
               m_app->dispToConsole(
                   QString("[Calibration] Entity[%1] ccPointCloud is nullptr.")
@@ -204,6 +208,9 @@ void CalibPlugin::doAction() {
                 QString(
                     "[Calibration] Entity[%1] Failed to find feature point.")
                     .arg(i),
+                ccMainAppInterface::ERR_CONSOLE_MESSAGE);
+            m_app->dispToConsole(
+                QString("[Calibration] ErrorCode :%1 .").arg(comput_status),
                 ccMainAppInterface::ERR_CONSOLE_MESSAGE);
           }
         } else {
