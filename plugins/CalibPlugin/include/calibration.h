@@ -38,7 +38,7 @@ struct Ballot {
 
 class Operator {
  public:
-   enum CalibrationError {
+  enum CalibrationError {
     CE_INPUT_NULL = 1,
     CE_ATTENSION_NULL = 2,
     CE_CLUSTER_FAIL = 3,
@@ -53,9 +53,8 @@ class Operator {
     kdtree_.reset((new pcl::KdTreeFLANN<pcl::PointXYZI>));
     normal_estimator_.setSearchMethod(tree_);
     normal_estimator_.setKSearch(50);
-    // Jaguar 6.0 , 0.05
-    smoothness_ = 10.0;
-    curvature_ = 0.1;
+    smoothness_ = 20.0;
+    curvature_ = 0.2;
     save_flag_ = true;
     lidar_model_ = FALCON;
   }
@@ -66,14 +65,17 @@ class Operator {
 
   void guide_filter(CloudPtr source, CloudPtr &result);
   void dbscan(CloudPtr source, CloudPtr &result);
-  void region_growing_cluster(CloudPtr source, CloudPtr &result);
+  void euclidean_cluster(CloudPtr source, CloudPtr &result);
+  void region_growing_cluster(CloudPtr source, CloudPtr &result,
+                              const bool &keep_all);
   void outline_remove(CloudPtr source, CloudPtr &result);
 
   void voteNormal(CloudPtr source, CloudPtr &result, float &angle);
   void voteDistance(CloudPtr reference, CloudPtr target, CloudPtr &result);
 
   void fitPlane(CloudPtr source, CloudPtr &result, float &a, float &b, float &c,
-                float &d);
+                float &d, const double &threshold);
+  void fitPlane(CloudPtr source, CloudPtr &result, const double &threshold);
   void fitCircle(CloudPtr source, float &center_x, float &center_y,
                  float &center_z, float &radius);
   void findPlate(CloudPtr source, CloudPtr &result,
@@ -90,6 +92,19 @@ class Operator {
   inline void setDebugFolder(const std::string &name) { debug_folder_ = name; }
   inline void setInputCloud(const CloudPtr &input) { input_cloud_ = input; }
   inline void setSaveFlag(const bool &flag) { save_flag_ = flag; }
+  inline void setLidarModel(const int &model) {
+    lidar_model_ = LidarModel(model);
+    if (lidar_model_ == JAGUAR) {
+      // Jaguar 6.0 , 0.05
+      smoothness_ = 6.0;
+      curvature_ = 0.05;
+    }
+    if (lidar_model_ == FALCON) {
+      // Jaguar 20.0 , 0.2
+      smoothness_ = 20.0;
+      curvature_ = 0.2;
+    }
+  }
   void save_pcd(std::string name, const CloudPtr &cloud);
 
  private:
@@ -110,4 +125,7 @@ class Operator {
 };
 Eigen::Matrix3f transforme_normal_normal_3d(const Eigen::Vector3f &start,
                                             const Eigen::Vector3f &final);
+bool iter_fit_plane(const pcl::PointCloud<pcl::PointXYZI>::Ptr &source,
+                    pcl::PointCloud<pcl::PointXYZI>::Ptr &result, float &a,
+                    float &b, float &c, float &d, float &distance_thresh);
 }  // namespace Calibration

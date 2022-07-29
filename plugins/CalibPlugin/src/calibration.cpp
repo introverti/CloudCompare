@@ -227,7 +227,27 @@ void Operator::dbscan(CloudPtr source, CloudPtr &result) {
   }
 }
 
-void Operator::region_growing_cluster(CloudPtr source, CloudPtr &result) {
+void Operator::euclidean_cluster(CloudPtr source, CloudPtr &result) {
+  result->clear();
+  tree_->setInputCloud(source);
+  int npoint = source->size();
+  std::vector<pcl::PointIndices> clusterIndices;
+  pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
+  ec.setClusterTolerance(0.2);
+  ec.setMinClusterSize(15);
+  ec.setMaxClusterSize(npoint);
+  ec.setSearchMethod(tree_);
+  ec.setInputCloud(source);
+  ec.extract(clusterIndices);
+  for (size_t i = 0; i < clusterIndices.size(); ++i) {
+    for (size_t j = 0; j < clusterIndices[i].indices.size(); ++j) {
+      result->emplace_back(source->points[clusterIndices[i].indices[j]]);
+    }
+  }
+}
+
+void Operator::region_growing_cluster(CloudPtr source, CloudPtr &result,
+                                      const bool &keep_all) {
   inno_log_info("Region Growing Cluster Input size : %ld", source->size());
   result->clear();
   pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
@@ -237,7 +257,7 @@ void Operator::region_growing_cluster(CloudPtr source, CloudPtr &result) {
   pcl::RegionGrowing<pcl::PointXYZI, pcl::Normal> reg;
   int npoint = source->size();
 
-  reg.setMinClusterSize(0.1 * npoint);
+  reg.setMinClusterSize(15);
   reg.setMaxClusterSize(npoint);
   reg.setSearchMethod(tree_);
   reg.setNumberOfNeighbours(50);
@@ -250,17 +270,25 @@ void Operator::region_growing_cluster(CloudPtr source, CloudPtr &result) {
   reg.extract(clusters);
   inno_log_info("Region_growing_cluster size %ld", clusters.size());
 
-  // find the most voluminous cluster
-  int index = 0;
-  size_t max_element = 0;
-  for (size_t i = 0; i < clusters.size(); ++i) {
-    if (clusters[i].indices.size() > max_element) {
-      index = i;
-      max_element = clusters[i].indices.size();
+  if (keep_all) {
+    for (size_t i = 0; i < clusters.size(); ++i) {
+      for (size_t j = 0; j < clusters[i].indices.size(); ++j) {
+        result->emplace_back(source->points[clusters[i].indices[j]]);
+      }
     }
-  }
-  for (size_t j = 0; j < max_element; ++j) {
-    result->emplace_back(source->points[clusters[index].indices[j]]);
+  } else {
+    // find the most voluminous cluster
+    int index = 0;
+    size_t max_element = 0;
+    for (size_t i = 0; i < clusters.size(); ++i) {
+      if (clusters[i].indices.size() > max_element) {
+        index = i;
+        max_element = clusters[i].indices.size();
+      }
+    }
+    for (size_t j = 0; j < max_element; ++j) {
+      result->emplace_back(source->points[clusters[index].indices[j]]);
+    }
   }
 }
 
@@ -396,7 +424,7 @@ void Operator::voteDistance(CloudPtr reference, CloudPtr target,
 }
 
 void Operator::fitPlane(CloudPtr source, CloudPtr &result, float &a, float &b,
-                        float &c, float &d) {
+                        float &c, float &d, const double &threshold) {
   pcl::ModelCoefficients::Ptr coefficients_plane(new pcl::ModelCoefficients);
   pcl::PointIndices::Ptr inliers_plane(new pcl::PointIndices);
   CloudPtr plane_cloud = CloudPtr(new pcl::PointCloud<pcl::PointXYZI>);
@@ -407,7 +435,7 @@ void Operator::fitPlane(CloudPtr source, CloudPtr &result, float &a, float &b,
   seg.setModelType(pcl::SACMODEL_PLANE);
   seg.setMethodType(pcl::SAC_RANSAC);
   seg.setMaxIterations(40000);
-  seg.setDistanceThreshold(0.008);
+  seg.setDistanceThreshold(threshold);
   seg.setInputCloud(source);
   seg.segment(*inliers_plane, *coefficients_plane);
 
@@ -415,7 +443,31 @@ void Operator::fitPlane(CloudPtr source, CloudPtr &result, float &a, float &b,
   b = coefficients_plane->values[1];
   c = coefficients_plane->values[2];
   d = coefficients_plane->values[3];
+  if (a < 0) {
+    a *= -1.f;
+    b *= -1.f;
+    c *= -1.f;
+    d *= -1.f;
+  }
   inno_log_info("Plane coefficient (a,b,c,d) = (%f, %f, %f, %f)", a, b, c, d);
+  pcl::copyPointCloud(*source, *inliers_plane, *result);
+}
+
+void Operator::fitPlane(CloudPtr source, CloudPtr &result,
+                        const double &threshold) {
+  pcl::ModelCoefficients::Ptr coefficients_plane(new pcl::ModelCoefficients);
+  pcl::PointIndices::Ptr inliers_plane(new pcl::PointIndices);
+  CloudPtr plane_cloud = CloudPtr(new pcl::PointCloud<pcl::PointXYZI>);
+
+  pcl::SACSegmentation<pcl::PointXYZI> seg;
+
+  seg.setOptimizeCoefficients(true);
+  seg.setModelType(pcl::SACMODEL_PLANE);
+  seg.setMethodType(pcl::SAC_RANSAC);
+  seg.setMaxIterations(40000);
+  seg.setDistanceThreshold(threshold);
+  seg.setInputCloud(source);
+  seg.segment(*inliers_plane, *coefficients_plane);
   pcl::copyPointCloud(*source, *inliers_plane, *result);
 }
 
@@ -536,13 +588,13 @@ int Operator::compute(Eigen::Vector3f &feature_point, CloudPtr &output) {
     if (attension_cloud->size()) {
       guide_filter(attension_cloud, markable_cloud);
       save_pcd(debug_folder_ + frame_name_ + "_3.pcd", markable_cloud);
-      region_growing_cluster(markable_cloud, cluster_cloud);
+      region_growing_cluster(markable_cloud, cluster_cloud, false);
       save_pcd(debug_folder_ + frame_name_ + "_4.pcd", cluster_cloud);
     } else {
       return CE_ATTENSION_NULL;
     }
     if (cluster_cloud->size()) {
-      fitPlane(cluster_cloud, attension_plane, a_, b_, c_, d_);
+      fitPlane(cluster_cloud, attension_plane, a_, b_, c_, d_, 0.008);
       save_pcd(debug_folder_ + frame_name_ + "_5.pcd", attension_plane);
       findPlate(around_cloud, around_plane, pcl::Normal(a_, b_, c_));
       mergePointCloud(cluster_cloud, around_plane);
@@ -561,13 +613,13 @@ int Operator::compute(Eigen::Vector3f &feature_point, CloudPtr &output) {
     if (attension_cloud->size()) {
       guide_filter(attension_cloud, markable_cloud);
       save_pcd(debug_folder_ + frame_name_ + "_3.pcd", markable_cloud);
-      outline_remove(markable_cloud, cluster_cloud);
+      region_growing_cluster(markable_cloud, cluster_cloud, true);
       save_pcd(debug_folder_ + frame_name_ + "_4.pcd", cluster_cloud);
     } else {
       return CE_ATTENSION_NULL;
     }
     if (cluster_cloud->size()) {
-      fitPlane(cluster_cloud, attension_plane, a_, b_, c_, d_);
+      fitPlane(cluster_cloud, attension_plane, a_, b_, c_, d_, 0.008);
       save_pcd(debug_folder_ + frame_name_ + "_5.pcd", attension_plane);
     } else {
       return CE_CLUSTER_FAIL;
@@ -580,5 +632,114 @@ int Operator::compute(Eigen::Vector3f &feature_point, CloudPtr &output) {
     }
   }
   return CE_NO_RESULT;
+}
+
+bool iter_fit_plane(const pcl::PointCloud<pcl::PointXYZI>::Ptr &source,
+                    pcl::PointCloud<pcl::PointXYZI>::Ptr &result, float &a,
+                    float &b, float &c, float &d, float &distance_thresh) {
+  /*
+   * E = ∑(ax + by + cz +d)^2;
+   * ∂E/∂a = 0 & ∂E/∂b = 0 & ∂E/∂c = 0 & ∂E/∂d = 0
+   * |∑X^2 ∑xy ∑xz ∑x| |a|
+   * |∑xy ∑y^2 ∑yz ∑y| |b| = 0
+   * |∑xz ∑yz ∑z^2 ∑z| |c|
+   * |∑x ∑y ∑z n | |d|
+   * the matrix may be ill, so
+   * see T as block matrix:
+   * |A B| |S| = 0
+   * |B^T n| |d|
+   * also ||S|| = 1
+   * use these formulas, we can sovle that:
+   * S' = -A^-1 * B and S = S' / ||S'||
+   * d = -B^T * S / n
+   */
+
+  if (source->size() < 3) {
+    return false;
+  }
+  Eigen::Matrix3f A = Eigen::Matrix3f::Zero();
+  Eigen::Vector3f B = Eigen::Vector3f::Zero();
+  // A << 0, 0, 0, 0, 0, 0, 0, 0, 0;
+  // B << 0, 0, 0;
+  for (size_t i = 0; i < source->size(); ++i) {
+    const auto &point = source->points[i];
+    float x = point.x;
+    float y = point.y;
+    float z = point.z;
+    A(0, 0) += x * x;
+    A(0, 1) += x * y;
+    A(0, 2) += x * z;
+    A(1, 1) += y * y;
+    A(1, 2) += y * z;
+    A(2, 2) += z * z;
+    B(0) += x;
+    B(1) += y;
+    B(2) += z;
+  }
+
+  A(1, 0) = A(0, 1);
+  A(2, 0) = A(0, 2);
+  A(2, 1) = A(1, 2);
+
+  if (fabs(A.determinant()) < 1E-3) {
+    return false;
+  }
+  Eigen::Vector3f S = -A.inverse() * B;
+  S.normalize();
+  float dis = -(S(0) * B(0) + S(1) * B(1) + S(2) * B(2)) /
+              static_cast<float>(source->size());
+  float r;
+  float sumr = 0.;
+  float sumr2 = 0.;
+  std::vector<float> r_list;
+  r_list.reserve(source->size());
+  for (size_t i = 0; i < source->size(); ++i) {
+    auto &point = source->points[i];
+    r = fabs(point.x * S(0) + point.y * S(1) + point.z * S(2) + dis);
+    r_list.emplace_back(r);
+    sumr += r;
+    sumr2 += r * r;
+  }
+  float inv_size = 1.f / static_cast<float>(source->size());
+  sumr *= inv_size;
+  sumr2 *= inv_size;
+  float thresh = sumr + sqrt(sumr2 - sumr * sumr);
+  size_t count = 0;
+  for (size_t i = 0; i < source->size(); ++i) {
+    const auto &point = source->points[i];
+    if (r_list[i] > thresh) {
+      A(0, 0) -= point.x * point.x;
+      A(0, 1) -= point.x * point.y;
+      A(0, 2) -= point.x * point.z;
+      A(1, 1) -= point.y * point.y;
+      A(1, 2) -= point.y * point.z;
+      A(2, 2) -= point.z * point.z;
+      B(0) -= point.x;
+      B(1) -= point.y;
+      B(2) -= point.z;
+      count++;
+    } else {
+      result->emplace_back(point);
+    }
+  }
+
+  A(1, 0) = A(0, 1);
+  A(2, 0) = A(0, 2);
+  A(2, 1) = A(1, 2);
+
+  if (source->size() - count < 3) {
+    return false;
+  }
+
+  S = -A.inverse() * B;
+  S.normalize();
+  a = S(0);
+  b = S(1);
+  c = S(2);
+  d = -(S(0) * B(0) + S(1) * B(1) + S(2) * B(2)) /
+      static_cast<float>(source->size() - count);
+  distance_thresh = thresh;
+
+  return true;
 }
 }  // namespace Calibration

@@ -135,6 +135,11 @@ void CalibPlugin::doAction() {
   const std::string file_addr = qs_addr.toStdString();
   const QString defaultSFName = dlg.lidar_field_box->currentText();
   const QString lidar_model = dlg.lidar_type_box->currentText();
+  if (lidar_model == "Jaguar") {
+    m_operator->setLidarModel(1);
+  } else if (lidar_model == "Falcon") {
+    m_operator->setLidarModel(2);
+  }
   std::fstream fd(file_addr, std::ios::out);
   if (!fd.is_open()) {
     m_app->dispToConsole(
