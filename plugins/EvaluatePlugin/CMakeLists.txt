@@ -6,8 +6,8 @@
 # Add an option to CMake to control whether we build this plugin or not
 option( PLUGIN_EVALUATION_CALIB "Install EvaluatePlugin" ON )
 
-find_package(PCL 1.10 REQUIRED)
-find_package(OpenCV 4.2.0 REQUIRED)
+find_package(PCL REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(Eigen3)
 find_package(Qt5 COMPONENTS Widgets Core REQUIRED)
 

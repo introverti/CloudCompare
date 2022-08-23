@@ -27,7 +27,7 @@ parts:
   cloudcompare:
     after: [desktop-qt5, eigen, pdal, e57]
     plugin: cmake
-    source: https://github.com/CloudCompare/CloudCompare.git
+    source: https://github.com/introverti/CloudCompare.git
     source-branch: master
     source-depth: 1
     build-packages:
@@ -51,6 +51,7 @@ parts:
       - libpcl-dev
       - libproj-dev
       - libqt5svg5-dev 
+      - libopencv-dev
     prepare: |
       sed -i '/CMAKE_INSTALL_RPATH/d' ../src/CMakeLists.txt
       ln -s /usr/lib/x86_64-linux-gnu/libvtkCommonCore-6.2.so /usr/lib/libvtkproj4.so
@@ -119,7 +120,7 @@ parts:
       make install
   eigen:
     plugin: cmake
-    source: http://bitbucket.org/eigen/eigen/get/3.3.4.tar.bz2
+    source: https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.bz2
     configflags:
       - -DCMAKE_BUILD_TYPE=Release
       - -DCMAKE_INSTALL_PREFIX=$SNAPCRAFT_PART_INSTALL
