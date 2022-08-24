@@ -118,7 +118,7 @@ void EvaluatePlugin::doAction() {
   int src_id = -1;
   QString reflectance = "reflectance";
   QString intensity = "intensity";
-  QString origin_source = "Original_cloud_index";
+  QString origin_source = "Original cloud index";
   ref_id = cloud->getScalarFieldIndexByName(qPrintable(reflectance));
   src_id = cloud->getScalarFieldIndexByName(qPrintable(origin_source));
 
@@ -131,7 +131,7 @@ void EvaluatePlugin::doAction() {
     }
   }
   if (src_id < 0) {
-    m_app->dispToConsole("[Evaluation] Failed to find Original_cloud_index",
+    m_app->dispToConsole("[Evaluation] Failed to find Original cloud index",
                          ccMainAppInterface::ERR_CONSOLE_MESSAGE);
   }
   CCCoreLib::ScalarField *ref_field = cloud->getScalarField(ref_id);
