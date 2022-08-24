@@ -152,7 +152,6 @@ void CalibPlugin::doAction() {
     size_t end_ite = file_addr.find_last_of('/');
     std::string debug_folder =
         end_ite > 0 ? file_addr.substr(0, end_ite) : "";
-    std::cout << debug_folder << std::endl;
     // header
     fd << "[lidar]" << std::endl;
     // main process

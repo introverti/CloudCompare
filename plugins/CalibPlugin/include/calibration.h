@@ -23,6 +23,7 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <vector>
+#include "logger.h"
 
 namespace Calibration {
 typedef pcl::PointCloud<pcl::PointXYZI>::Ptr CloudPtr;
@@ -97,6 +98,7 @@ class Operator {
                 debug_folder_ = debug_folder_ + "/";
             }
             save_flag_ = true;
+            ILOG->set_log_address(name+"log");
         } else {
             save_flag_ = false;
         }

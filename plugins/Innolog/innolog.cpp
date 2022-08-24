@@ -87,7 +87,7 @@ InnoLog::InnoLog() {
   module_switch_ = true;
   pthread_mutex_init(&log_out_mutex_, NULL);
   pthread_mutex_init(&log_err_mutex_, NULL);
-  std::string name = "/home/xavier/old/0704/log/log";
+  std::string name = "";
   rotate_out_ = new RotateLogFile(name.c_str(),
                                     10,
                                     50 * 1000 * 1000);

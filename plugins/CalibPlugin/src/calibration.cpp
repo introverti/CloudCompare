@@ -1,6 +1,6 @@
 #include "calibration.h"
 
-#include "logger.h"
+
 namespace Calibration {
 void Operator::save_pcd(std::string name, const CloudPtr &cloud) {
   if (save_flag_ && cloud->size()) {
